@@ -1,0 +1,236 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// ─── Users ───────────────────────────────────────────────
+model User {
+  id           String   @id @default(cuid())
+  clerkId      String   @unique
+  email        String   @unique
+  name         String?
+  avatarUrl    String?
+  githubUrl    String?
+  portfolioUrl String?
+  cvUrl               String?
+  onboardingCompleted Boolean  @default(false)
+  careerScore         Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  submissions         Submission[]
+  organizationMembers OrganizationMember[]
+  userBadges          UserBadge[]
+  leaderboardEntries  Leaderboard[]
+  notifications       Notification[]
+
+  @@index([clerkId])
+}
+
+// ─── Organizations (Sponsors) ────────────────────────────
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  logo      String?
+  website   String?
+  industry  String?
+  createdAt DateTime @default(now())
+
+  members    OrganizationMember[]
+  challenges Challenge[]
+}
+
+// ─── Organization Members ────────────────────────────────
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  role           OrgRole  @default(MEMBER)
+  createdAt      DateTime @default(now())
+
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ─── Challenges ──────────────────────────────────────────
+model Challenge {
+  id                String          @id @default(cuid())
+  title             String
+  slug              String          @unique
+  description       String          @db.Text
+  problemStatement  String          @db.Text
+  evaluationRubric  Json?
+  dataPackUrl       String?
+  prizeAmount       Float           @default(0)
+  deadline          DateTime
+  status            ChallengeStatus @default(DRAFT)
+  difficulty        Difficulty      @default(INTERMEDIATE)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  submissions        Submission[]
+  leaderboardEntries Leaderboard[]
+  userBadges         UserBadge[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([organizationId])
+  @@index([deadline])
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum ChallengeStatus {
+  DRAFT
+  ACTIVE
+  JUDGING
+  CLOSED
+}
+
+// ─── Submissions ─────────────────────────────────────────
+model Submission {
+  id               String           @id @default(cuid())
+  repoUrl          String
+  deckUrl          String?
+  videoUrl         String?
+  description      String           @db.Text
+  status           SubmissionStatus @default(PENDING)
+  provisionalScore Float?
+  finalScore       Float?
+  aiFeedback       Json?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  scoreDimensions ScoreDimension[]
+
+  @@unique([userId, challengeId])
+  @@index([userId])
+  @@index([challengeId])
+  @@index([status])
+}
+
+enum SubmissionStatus {
+  PENDING
+  SCORING
+  SCORED
+  JUDGE_REVIEW
+  FINAL
+  ERROR
+}
+
+// ─── Score Dimensions ────────────────────────────────────
+model ScoreDimension {
+  id            String     @id @default(cuid())
+  dimensionName String
+  score         Float
+  feedback      String?    @db.Text
+  scoredBy      ScoredBy
+  createdAt     DateTime   @default(now())
+
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+}
+
+enum ScoredBy {
+  AI
+  HUMAN
+}
+
+// ─── Badges ──────────────────────────────────────────────
+model Badge {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  imageUrl    String?
+  category    String?
+
+  userBadges UserBadge[]
+}
+
+// ─── User Badges ─────────────────────────────────────────
+model UserBadge {
+  id        String   @id @default(cuid())
+  awardedAt DateTime @default(now())
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId     String
+  badge       Badge     @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  challengeId String?
+  challenge   Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, badgeId, challengeId])
+  @@index([userId])
+}
+
+// ─── Leaderboard ─────────────────────────────────────────
+model Leaderboard {
+  id        String   @id @default(cuid())
+  rank      Int
+  score     Float
+  updatedAt DateTime @updatedAt
+
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([challengeId, rank])
+  @@index([userId])
+}
+
+// ─── Notifications ───────────────────────────────────────
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+}
+
+enum NotificationType {
+  CHALLENGE_OPENED
+  CHALLENGE_CLOSING
+  SUBMISSION_RECEIVED
+  SCORING_COMPLETE
+  BADGE_AWARDED
+  LEADERBOARD_UPDATE
+  SYSTEM
+}

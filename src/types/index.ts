@@ -1,0 +1,18 @@
+export type {
+  User,
+  Organization,
+  OrganizationMember,
+  Challenge,
+  Submission,
+  ScoreDimension,
+  Badge,
+  UserBadge,
+  Leaderboard,
+  Notification,
+  OrgRole,
+  ChallengeStatus,
+  SubmissionStatus,
+  Difficulty,
+  ScoredBy,
+  NotificationType,
+} from '@prisma/client';
